@@ -1,6 +1,7 @@
 import logging
 import os
 import json
+import asyncio
 from typing import Any, Dict, List
 
 from google import genai
@@ -18,28 +19,72 @@ except Exception:
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 
-async def evaluate_readme(repo_name: str, readme_content: str):
-    if not readme_content:
-        return {"level": "Unknown", "assessment": "No README found."}
+async def evaluate_readmes_batch(repos: List[Dict[str, str]]) -> List[Dict[str, Any]]:
+    if not repos:
+        return []
 
-    prompt = f"""
-    Evaluate this README for {repo_name}. 
-    Return ONLY JSON with keys: "level", "assessment".
-    README: {readme_content[:5000]}
-    """
+    prompt_parts = [
+        "Please evaluate the following repository READMEs and return ONLY a valid JSON array.",
+        "Do not include markdown formatting, code fences, or any text outside the JSON array.",
+        "Each object must look exactly like: {\"repo_name\": \"name\", \"level\": \"Beginner/Advanced/etc\", \"assessment\": \"short string\"}.",
+    ]
 
-    try:
-        print(f"--- PROMPT ---:\n{prompt}\n--- END PROMPT ---")
-        response = await client.aio.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt
-        )
+    for repo in repos:
+        repo_name = repo.get("repo_name", "")
+        content = repo.get("readme_content", "")
+        prompt_parts.append(f"--- START REPO: {repo_name} ---")
+        prompt_parts.append(content)
+        prompt_parts.append(f"--- END REPO: {repo_name} ---")
 
-        # ניקוי המחרוזת והפיכה ל-JSON
-        text = response.text.strip().replace("```json", "").replace("```", "")
-        return json.loads(text)
+    prompt = "\n".join(prompt_parts)
+    max_retries = 3
 
-    except Exception as e:
-        print(f"--- AI ERROR ---: {e}")
+    def _strip_markdown_json(raw_text: str) -> str:
+        cleaned = raw_text.strip()
+        if cleaned.startswith("```json"):
+            cleaned = cleaned.removeprefix("```json")
+        elif cleaned.startswith("```"):
+            cleaned = cleaned.removeprefix("```")
 
-        return {"level": "Error", "assessment": "AI processing failed."}
+        if cleaned.endswith("```"):
+            cleaned = cleaned.removesuffix("```")
+
+        return cleaned.strip()
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            print(f"--- PROMPT ---:\n{prompt}\n--- END PROMPT ---")
+            response = await client.aio.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+            )
+
+            # ניקוי המחרוזת והפיכה ל-JSON
+            text = _strip_markdown_json(response.text)
+            parsed = json.loads(text)
+            if not isinstance(parsed, list):
+                raise ValueError("Expected a JSON array from Gemini.")
+
+            return parsed
+
+        except Exception as e:
+            err_text = str(e)
+            print(f"--- AI ERROR (attempt {attempt}) ---: {e}")
+
+            is_rate_limit = False
+            lower = err_text.lower()
+            if "429" in err_text or "resource_exhausted" in lower or "rate limit" in lower:
+                is_rate_limit = True
+
+            if is_rate_limit and attempt < max_retries:
+                await asyncio.sleep(3)
+                continue
+
+            return [
+                {
+                    "repo_name": repo.get("repo_name", ""),
+                    "level": "Error",
+                    "assessment": "AI processing failed.",
+                }
+                for repo in repos
+            ]

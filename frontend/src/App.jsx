@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Search, Loader2, ExternalLink } from 'lucide-react'
+import { Search, Loader2, ExternalLink, UserX } from 'lucide-react'
 
 function getBadgeClasses(level) {
 	const key = String(level || '').toLowerCase()
@@ -15,11 +15,31 @@ function getBadgeClasses(level) {
 	}
 }
 
+function extractUsername(inputString) {
+	if (typeof inputString !== 'string') return ''
+
+	let cleaned = inputString.trim()
+	if (!cleaned) return ''
+
+	const queryIndex = cleaned.indexOf('?')
+	if (queryIndex !== -1) cleaned = cleaned.slice(0, queryIndex)
+
+	const hashIndex = cleaned.indexOf('#')
+	if (hashIndex !== -1) cleaned = cleaned.slice(0, hashIndex)
+
+	cleaned = cleaned.replace(/^https?:\/\/(www\.)?github\.com\//i, '')
+	cleaned = cleaned.replace(/^github\.com\//i, '')
+	cleaned = cleaned.replace(/\/+$/g, '')
+
+	return cleaned
+}
+
 export default function App() {
 	const [username, setUsername] = useState('')
 	const [isLoading, setIsLoading] = useState(false)
 	const [data, setData] = useState(null)
 	const [error, setError] = useState(null)
+	const [errorStatus, setErrorStatus] = useState(null)
 
 	const analyze = async () => {
 		if (!username) return
@@ -28,7 +48,15 @@ export default function App() {
 		setData(null)
 
 		try {
-			const url = `http://localhost:8000/api/evaluate/${encodeURIComponent(username)}`
+			const cleanUsername = extractUsername(username)
+			if (!cleanUsername) {
+				setError('Please enter a valid GitHub username.')
+				setErrorStatus(null)
+				setIsLoading(false)
+				return
+			}
+
+			const url = `http://localhost:8000/api/evaluate/${encodeURIComponent(cleanUsername)}`
 			const res = await fetch(url)
 
 			if (!res.ok) {
@@ -45,6 +73,7 @@ export default function App() {
 					} catch (_) {}
 				}
 				setError(message)
+				setErrorStatus(res.status)
 				setIsLoading(false)
 				return
 			}
@@ -53,9 +82,15 @@ export default function App() {
 			setData(json)
 		} catch (err) {
 			setError(err?.message || 'Network error')
+			setErrorStatus(null)
 		} finally {
 			setIsLoading(false)
 		}
+	}
+
+	const handleNewSearch = () => {
+		setError(null)
+		setErrorStatus(null)
 	}
 
 	return (
@@ -75,6 +110,7 @@ export default function App() {
 							value={username}
 							onChange={(e) => setUsername(e.target.value)}
 							onKeyDown={(e) => e.key === 'Enter' && analyze()}
+							onFocus={handleNewSearch}
 							placeholder="Enter GitHub username (e.g. octocat)"
 							className="flex-1 px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
 						/>
@@ -98,7 +134,17 @@ export default function App() {
 					</div>
 				)}
 
-				{error && (
+{error && errorStatus === 404 && (
+				<div className="max-w-3xl mx-auto mb-6 flex flex-col items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-12">
+					<UserX className="w-16 h-16 text-gray-400 dark:text-gray-500 mb-4" />
+					<h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2">User Not Found</h3>
+					<p className="text-gray-600 dark:text-gray-400 text-center max-w-md">
+						Oops! We couldn't find a GitHub user with that name. Please check the spelling and try again.
+					</p>
+				</div>
+			)}
+
+			{error && errorStatus !== 404 && (
 					<div className="max-w-3xl mx-auto mb-6 rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/40 p-4">
 						<p className="text-sm text-red-800 dark:text-red-200">{error}</p>
 					</div>
@@ -106,11 +152,10 @@ export default function App() {
 
 				{data?.projects && data.projects.length > 0 && (
 					<section>
-						<div className="mb-6 flex items-center justify-between">
-							<h2 className="text-xl font-semibold">Results</h2>
-							<p className="text-sm text-gray-500">{data.projects.length} project(s) evaluated</p>
-						</div>
-
+					<div className="mb-6 flex items-center justify-between">
+						<h2 className="text-xl font-semibold">Results</h2>
+						<p className="text-sm text-gray-500">{data.projects.length} project(s) evaluated</p>
+					</div>
 						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 							{data.projects.map((project) => (
 								<article
