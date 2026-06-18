@@ -25,6 +25,9 @@ In this project, I aimed to use AI not just as a product feature, but as a full 
 
 <img width="1129" height="1008" alt="image" src="https://github.com/user-attachments/assets/1c8c8544-bd62-4e02-b080-15aa2ed18c30" />
 
+<img width="438" height="191" alt="image" src="https://github.com/user-attachments/assets/e7541a64-846f-4549-a621-522715dd18c3" />
+
+
 
 ## 🔮 Future Work
 If I had another week to work on this project, I would add:
