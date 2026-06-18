@@ -28,8 +28,8 @@ In this project, I aimed to use AI not just as a product feature, but as a full 
 
 ## 🔮 Future Work
 If I had another week to work on this project, I would add:
-* **Caching & Database:** Storing previous evaluation results in a database to save API calls and reduce wait times for previously searched users.
-* **Extended Testing:** Writing comprehensive unit tests and handling more edge cases.
+* **Resume-Ready Export:** A feature designed for candidates and recruiters, allowing users to export project evaluations into a polished, copy-paste format ready for CVs (highlighting key technologies and project impact).
+* **Caching & Database:** Storing previous evaluation results in a database to save API calls and reduce wait times.
 * **SaaS UI/UX:** Elevating the frontend design and user experience to a full SaaS product level.
 * **Deep Code Analysis:** Expanding the API integration to analyze actual source code files in the repositories, rather than just the READMEs.
 
